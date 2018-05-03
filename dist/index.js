@@ -16,6 +16,9 @@ var DelWebpackPlugin = function () {
   function DelWebpackPlugin(options) {
     _classCallCheck(this, DelWebpackPlugin);
 
+    this.compilerInstances = 0;
+    this.compilerStats = [];
+
     this.options = _extends({
       info: true,
       exclude: [],
@@ -28,20 +31,34 @@ var DelWebpackPlugin = function () {
     value: function apply(compiler) {
       var _this = this;
 
+      this.compilerInstances += 1;
+
       var outputPath = compiler.options.output.path;
 
-      compiler.plugin('done', function (stats) {
+      var callback = function callback(stats) {
+        var _ref;
+
+        _this.compilerStats.push(stats);
+
+        if (_this.compilerStats.length !== _this.compilerInstances) {
+          return;
+        }
+
         // check all modules work
-        if (stats.hasErrors()) {
+        if (_this.compilerStats.some(function (stats) {
+          return stats.hasErrors();
+        })) {
           console.log();
           console.log('' + chalk.red('Del Webpack Plugin stopped according to module failed.'));
           return;
         }
 
         // gather info from compiled files
-        var assetNames = stats.toJson().assets.map(function (asset) {
-          return asset.name;
-        });
+        var assetNames = (_ref = []).concat.apply(_ref, _toConsumableArray(_this.compilerStats.map(function (stats) {
+          return stats.toJson().assets.map(function (asset) {
+            return asset.name;
+          });
+        })));
 
         // include files, default is all files (**) under working folder
         var includePatterns = _this.options.include.map(function (name) {
@@ -59,6 +76,8 @@ var DelWebpackPlugin = function () {
         del(includePatterns, {
           ignore: excludePatterns
         }).then(function (paths) {
+          _this.compilerStats = [];
+
           if (_this.options.info) {
             console.log();
             console.log('===== Del Webpack Plugin ===');
@@ -75,7 +94,13 @@ var DelWebpackPlugin = function () {
             console.log();
           }
         });
-      });
+      };
+
+      if (compiler.hooks) {
+        compiler.hooks.done.tap('del-webpack-plugin', callback);
+      } else {
+        compiler.plugin('done', callback);
+      }
     }
   }]);
 

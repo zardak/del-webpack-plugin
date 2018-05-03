@@ -4,6 +4,9 @@ const chalk = require('chalk')
 
 class DelWebpackPlugin {
   constructor (options) {
+    this.compilerInstances = 0
+    this.compilerStats = []
+
     this.options = {
       info: true, 
       exclude: [], 
@@ -13,11 +16,19 @@ class DelWebpackPlugin {
   }
 
   apply (compiler) {
+    this.compilerInstances += 1
+
     const outputPath = compiler.options.output.path
 
     const callback = stats => {
+      this.compilerStats.push(stats)
+
+      if (this.compilerStats.length !== this.compilerInstances) {
+        return
+      }
+
       // check all modules work
-      if (stats.hasErrors()) {
+      if (this.compilerStats.some(stats => stats.hasErrors())) {
         console.log()
         console.log(
           `${chalk.red(`Del Webpack Plugin stopped according to module failed.`)}`
@@ -26,7 +37,7 @@ class DelWebpackPlugin {
       }
 
       // gather info from compiled files
-      const assetNames = stats.toJson().assets.map(asset => asset.name)
+      const assetNames = [].concat(...this.compilerStats.map(stats => stats.toJson().assets.map(asset => asset.name)))
 
       // include files, default is all files (**) under working folder
       const includePatterns = this.options.include.map(name => path.join(outputPath, name))
@@ -42,6 +53,8 @@ class DelWebpackPlugin {
       del(includePatterns, {
         ignore: excludePatterns
       }).then(paths => {
+        this.compilerStats = []
+
         if (this.options.info) {
           console.log()
           console.log(`===== Del Webpack Plugin ===`)
